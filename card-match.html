@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Matching Activity</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f0e8;
+    --ink: #1a1a2e;
+    --accent: #e84545;
+    --success: #2ecc71;
+    --wrong: #e74c3c;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(232,69,69,0.06) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(26,26,46,0.05) 0%, transparent 50%);
+    min-height: 100vh;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 32px;
+    background: rgba(245,240,232,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(26,26,46,0.08);
+  }
+
+  header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.3rem;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+
+  header p {
+    font-size: 0.8rem;
+    color: rgba(26,26,46,0.5);
+    font-weight: 300;
+  }
+
+  #check-btn {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 50px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+    letter-spacing: 0.03em;
+  }
+  #check-btn:hover { background: var(--accent); transform: scale(1.04); }
+
+  /* ── Layout ── */
+  #main {
+    display: flex;
+    flex-direction: column;
+    padding: 32px;
+    gap: 28px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  #matching-area {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .pair-row {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  /* Concept card — fixed anchor on the left */
+  .concept-card {
+    flex-shrink: 0;
+    width: 190px;
+    border-radius: 12px;
+    padding: 18px 20px;
+    color: #fff;
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem;
+    font-style: italic;
+    text-align: center;
+    box-shadow: 4px 6px 20px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .arrow {
+    color: rgba(26,26,46,0.25);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    flex: 1;
+    min-height: 72px;
+    border-radius: 12px;
+    border: 2px dashed rgba(26,26,46,0.18);
+    background: rgba(255,255,255,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+
+  .drop-zone .placeholder {
+    font-size: 0.76rem;
+    color: rgba(26,26,46,0.28);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .drop-zone.hover {
+    border-color: var(--accent);
+    background: rgba(232,69,69,0.07);
+    box-shadow: 0 0 0 3px rgba(232,69,69,0.15);
+  }
+
+  .drop-zone.occupied {
+    border-style: solid;
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* Definition cards */
+  .def-card {
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #fff;
+    cursor: grab;
+    user-select: none;
+    box-shadow: 3px 5px 16px rgba(0,0,0,0.15);
+    transition: box-shadow 0.15s, transform 0.15s;
+    touch-action: none;
+  }
+
+  .def-card:hover {
+    box-shadow: 6px 10px 24px rgba(0,0,0,0.22);
+    transform: translateY(-2px);
+  }
+
+  /* Card while being dragged (original fades) */
+  .def-card.drag-source { opacity: 0.2; pointer-events: none; }
+
+  /* Card placed inside a drop zone fills it */
+  .drop-zone .def-card {
+    width: 100%;
+    border-radius: 10px;
+    transform: none;
+  }
+  .drop-zone .def-card:hover { transform: none; }
+
+  /* Floating ghost follows cursor */
+  #drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.9;
+    transform: rotate(1.5deg) scale(1.03);
+    box-shadow: 8px 14px 32px rgba(0,0,0,0.28) !important;
+    transition: none;
+  }
+
+  /* Definition pool */
+  #definitions-pool {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 22px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 16px;
+    border: 1px solid rgba(26,26,46,0.08);
+    min-height: 72px;
+  }
+
+  #pool-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(26,26,46,0.35);
+    margin-bottom: -4px;
+  }
+
+  #definitions-pool .def-card {
+    flex: 1 1 180px;
+    max-width: 260px;
+  }
+
+  /* Colors */
+  .color-0 { background: #e84545; }
+  .color-1 { background: #2d6a9f; }
+  .color-2 { background: #27ae60; }
+  .color-3 { background: #8e44ad; }
+  .color-4 { background: #e67e22; }
+  .color-5 { background: #1abc9c; }
+  .color-6 { background: #d35400; }
+  .color-7 { background: #2471a3; }
+  .color-8 { background: #7f8c8d; }
+
+  /* ── Result overlay ── */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,26,46,0.7);
+    backdrop-filter: blur(6px);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+  }
+  #overlay.show { display: flex; }
+
+  #result-box {
+    background: #fff;
+    border-radius: 24px;
+    padding: 48px 56px;
+    text-align: center;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.25);
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
+  #result-box .score {
+    font-family: 'DM Serif Display', serif;
+    font-size: 5rem;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  #result-box .score span { font-size: 2rem; color: rgba(26,26,46,0.35); }
+  #result-box .message { font-size: 1.1rem; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
+  #result-box .sub { font-size: 0.85rem; color: rgba(26,26,46,0.5); margin-bottom: 32px; }
+
+  #result-pairs { text-align: left; margin-bottom: 32px; }
+
+  .result-pair {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(26,26,46,0.07);
+    font-size: 0.82rem;
+  }
+  .result-pair .icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+  .result-pair .pair-text { color: rgba(26,26,46,0.7); line-height: 1.4; }
+  .result-pair .pair-text strong { color: var(--ink); display: block; margin-bottom: 2px; }
+  .result-pair.correct .icon::before { content: "✓"; color: var(--success); }
+  .result-pair.wrong   .icon::before { content: "✗"; color: var(--wrong); }
+
+  #retry-btn {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 14px 36px;
+    border-radius: 50px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+  }
+  #retry-btn:hover { background: var(--accent); transform: scale(1.03); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Card Matching Activity</h1>
+    <p>Drag each definition to its matching concept</p>
+  </div>
+  <button id="check-btn">Check Answers</button>
+</header>
+
+<div id="main">
+  <div id="matching-area"></div>
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <div id="pool-label">Definitions</div>
+    <div id="definitions-pool"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="result-box">
+    <div class="score" id="score-display">0 <span>/ 4</span></div>
+    <div class="message" id="score-message"></div>
+    <div class="sub" id="score-sub"></div>
+    <div id="result-pairs"></div>
+    <button id="retry-btn">Try Again</button>
+  </div>
+</div>
+
+<script>
+const PAIRS = [
+  {
+    concept: "Social Conformity",
+    definition: "What other people believe can lead us to claim that things are false even when, in the absence of other people, we would know they are true. (Asch, 1955)"
+  },
+  {
+    concept: "Spiral of Silence",
+    definition: "Political beliefs often go unexpressed when people fear their own ideas are not shared by the majority of the larger social community. (Noelle-Neumann, 1974)"
+  },
+  {
+    concept: "Social Circle Heuristic",
+    definition: "Our tendency to treat our local social networks as if they are representative of the larger social community. (Galesic et al., 2012; Pachur & Schulze, 2022)"
+  },
+  {
+    concept: "Illusory Truth Effect",
+    definition: "Repeated statements are rated as more true than new ones. (Hasher et al., 1977)"
+  }
+];
+
+const DISTRACTORS = [
+  "The tendency for people to seek out or be attracted to those who are similar to themselves."
+];
+
+const CONCEPT_COLORS    = ['color-0', 'color-1', 'color-2', 'color-3'];
+const DEF_COLORS        = ['color-4', 'color-5', 'color-6', 'color-7'];
+const DISTRACTOR_COLORS = ['color-8'];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ── Drag state ────────────────────────────────────────────────
+let dragCard     = null;
+let dragOrigin   = null; // original parent element
+let ghost        = null;
+let offsetX = 0, offsetY = 0;
+
+// ── Init ──────────────────────────────────────────────────────
+function initGame() {
+  document.getElementById('matching-area').innerHTML = '';
+  document.getElementById('definitions-pool').innerHTML = '';
+
+  // Build concept rows + drop zones
+  PAIRS.forEach((pair, i) => {
+    const row = document.createElement('div');
+    row.className = 'pair-row';
+
+    const concept = document.createElement('div');
+    concept.className = `concept-card ${CONCEPT_COLORS[i]}`;
+    concept.textContent = pair.concept;
+
+    const arrow = document.createElement('div');
+    arrow.className = 'arrow';
+    arrow.textContent = '→';
+
+    const zone = document.createElement('div');
+    zone.className = 'drop-zone';
+    zone.dataset.zoneIndex = i;
+    zone.innerHTML = '<span class="placeholder">Drop here</span>';
+
+    row.append(concept, arrow, zone);
+    document.getElementById('matching-area').appendChild(row);
+  });
+
+  // Build shuffled definition cards + distractors in pool
+  const defCards = shuffle([0, 1, 2, 3]).map(i => createDefCard(i));
+  const distractorCards = DISTRACTORS.map((text, i) => {
+    const card = document.createElement('div');
+    card.className = `def-card ${DISTRACTOR_COLORS[i]}`;
+    card.dataset.defIndex = 'distractor';
+    card.textContent = text;
+    card.addEventListener('mousedown', onMouseDown);
+    card.addEventListener('touchstart', onTouchStart, { passive: false });
+    return card;
+  });
+  shuffle([...defCards, ...distractorCards]).forEach(card => {
+    document.getElementById('definitions-pool').appendChild(card);
+  });
+}
+
+function createDefCard(defIndex) {
+  const card = document.createElement('div');
+  card.className = `def-card ${DEF_COLORS[defIndex]}`;
+  card.dataset.defIndex = defIndex;
+  card.textContent = PAIRS[defIndex].definition;
+  card.addEventListener('mousedown', onMouseDown);
+  card.addEventListener('touchstart', onTouchStart, { passive: false });
+  return card;
+}
+
+// ── Mouse ─────────────────────────────────────────────────────
+function onMouseDown(e) {
+  e.preventDefault();
+  beginDrag(e.currentTarget, e.clientX, e.clientY);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+function onMouseMove(e) { moveGhost(e.clientX, e.clientY); }
+function onMouseUp(e) {
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+  endDrop(e.clientX, e.clientY);
+}
+
+// ── Touch ─────────────────────────────────────────────────────
+function onTouchStart(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  beginDrag(e.currentTarget, t.clientX, t.clientY);
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('touchend', onTouchEnd);
+}
+function onTouchMove(e) { e.preventDefault(); moveGhost(e.touches[0].clientX, e.touches[0].clientY); }
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  const t = e.changedTouches[0];
+  endDrop(t.clientX, t.clientY);
+}
+
+// ── Core drag helpers ─────────────────────────────────────────
+function beginDrag(card,  clientX, clientY) {
+  dragCard   = card;
+  dragOrigin = card.parentElement;
+
+  const rect = card.getBoundingClientRect();
+  offsetX = clientX - rect.left;
+  offsetY = clientY - rect.top;
+
+  ghost = card.cloneNode(true);
+  ghost.id = 'drag-ghost';
+  ghost.style.width  = rect.width  + 'px';
+  ghost.style.left   = rect.left   + 'px';
+  ghost.style.top    = rect.top    + 'px';
+  document.body.appendChild(ghost);
+
+  card.classList.add('drag-source');
+}
+
+function moveGhost(cx, cy) {
+  if (!ghost) return;
+  ghost.style.left = (cx - offsetX) + 'px';
+  ghost.style.top  = (cy - offsetY) + 'px';
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    const r = zone.getBoundingClientRect();
+    zone.classList.toggle('hover',
+      cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom);
+  });
+}
+
+function endDrop(cx, cy) {
+  if (!dragCard) return;
+
+  ghost?.remove(); ghost = null;
+  dragCard.classList.remove('drag-source');
+  document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('hover'));
+
+  // Find drop zone under cursor
+  let targetZone = null;
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    const r = zone.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom)
+      targetZone = zone;
+  });
+
+  if (targetZone) {
+    const displaced = targetZone.querySelector('.def-card');
+
+    // Move dragCard into target zone
+    dragCard.remove();
+    targetZone.querySelector('.placeholder')?.remove();
+    targetZone.appendChild(dragCard);
+    targetZone.classList.add('occupied');
+
+    // Send displaced card to dragCard's origin
+    if (displaced) {
+      displaced.remove();
+      if (dragOrigin?.classList.contains('drop-zone')) {
+        dragOrigin.querySelector('.placeholder')?.remove();
+        dragOrigin.appendChild(displaced);
+        dragOrigin.classList.add('occupied');
+      } else {
+        document.getElementById('definitions-pool').appendChild(displaced);
+      }
+    } else if (dragOrigin?.classList.contains('drop-zone')) {
+      // Origin zone is now empty — restore placeholder
+      dragOrigin.classList.remove('occupied');
+      dragOrigin.innerHTML = '<span class="placeholder">Drop here</span>';
+    }
+  }
+  // Dropped outside any zone → card stays in its original parent (no-op)
+
+  dragCard = dragOrigin = null;
+}
+
+// ── Check ─────────────────────────────────────────────────────
+document.getElementById('check-btn').addEventListener('click', () => {
+  let correct = 0;
+  const resultPairs = document.getElementById('result-pairs');
+  resultPairs.innerHTML = '';
+
+  PAIRS.forEach((pair, i) => {
+    const zone  = document.querySelector(`.drop-zone[data-zone-index="${i}"]`);
+    const card  = zone?.querySelector('.def-card');
+    const match = card && parseInt(card.dataset.defIndex) === i;
+    if (match) correct++;
+
+    const row = document.createElement('div');
+    row.className = `result-pair ${match ? 'correct' : 'wrong'}`;
+    row.innerHTML = `
+      <div class="icon"></div>
+      <div class="pair-text">
+        <strong>${pair.concept}</strong>
+        ${pair.definition.substring(0, 80)}…
+      </div>`;
+    resultPairs.appendChild(row);
+  });
+
+  const messages = ['Keep practicing!', 'Good effort!', 'Well done!', 'Almost there!', 'Perfect score! 🎉'];
+  const subs = [
+    'Review the definitions and try again.',
+    "A few more tries and you'll nail it.",
+    "You're getting the hang of it!",
+    'Just one more to go!',
+    'You matched all pairs correctly!'
+  ];
+
+  document.getElementById('score-display').innerHTML = `${correct} <span>/ ${PAIRS.length}</span>`;
+  document.getElementById('score-message').textContent =
+    correct === PAIRS.length ? messages[4] : messages[Math.min(correct, 3)];
+  document.getElementById('score-sub').textContent =
+    correct === PAIRS.length ? subs[4] : subs[Math.min(correct, 3)];
+
+  document.getElementById('overlay').classList.add('show');
+});
+
+document.getElementById('retry-btn').addEventListener('click', () => {
+  document.getElementById('overlay').classList.remove('show');
+  initGame();
+});
+
+initGame();
+</script>
+</body>
+</html>
